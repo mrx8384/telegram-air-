@@ -166,4 +166,14 @@
     <string name="cannot_start">Cannot start: %1$s</string>
     <string name="empty_list">Add at least one channel first.</string>
     <string name="share_report">Share report</string>
+    <string name="action_remove">Remove from my Telegram</string>
+    <string name="action_remove_desc">Deletes channels you own and leaves all the others, so they disappear from your Telegram.</string>
+    <string name="keyword_title">Search by keyword</string>
+    <string name="keyword_hint">A word in the channel names, e.g. crypto</string>
+    <string name="add_keyword">Add keyword</string>
+    <string name="keyword_explain">Finds every channel in your own Telegram chats whose name contains this word. Works without a Telegram API (screen mode).</string>
+    <string name="keyword_confirm_title">Remove %1$d channel(s) found by “%2$s”?</string>
+    <string name="keyword_confirm_text">Check the list above and untick anything you want to keep. Channels you own will be deleted for everyone; the rest will be left. Type the keyword to confirm.</string>
+    <string name="keyword_confirm_btn">Confirm</string>
+    <string name="keyword_confirmed">Confirmed</string>
 </resources>

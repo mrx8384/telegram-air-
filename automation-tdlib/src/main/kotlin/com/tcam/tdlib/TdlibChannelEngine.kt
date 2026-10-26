@@ -66,6 +66,7 @@ class TdlibChannelEngine(
                 is ChannelInput.Username -> resolveUsername(client, input)
                 is ChannelInput.InviteLink -> resolveInvite(client, input)
                 is ChannelInput.Title -> resolveTitle(client, input)
+                is ChannelInput.Keyword -> resolveKeyword(client, input)
             }
         } catch (e: TdlibCallException) {
             if (e.failure.kind == FailureKind.NOT_FOUND) ResolveResult.NotFound("Not found: ${input.displayText} (${e.failure.message})")
@@ -121,6 +122,20 @@ class TdlibChannelEngine(
         return ChannelMatcher.classify(input, candidates)
     }
 
+    /** Keyword: only chats already in the user's own lists, never global search results. */
+    private suspend fun resolveKeyword(client: TdlClient, input: ChannelInput.Keyword): ResolveResult {
+        val ids = LinkedHashSet<Long>()
+        reqOrNull { client.searchChats(query = input.keyword, limit = 100) }?.chatIds?.let { ids.addAll(it.toList()) }
+        reqOrNull { client.searchChatsOnServer(query = input.keyword, limit = 100) }?.chatIds?.let { ids.addAll(it.toList()) }
+        val candidates = ids.mapNotNull { id ->
+            val chat = reqOrNull { client.getChat(chatId = id) } ?: return@mapNotNull null
+            val t = chat.type as? ChatTypeSupergroup ?: return@mapNotNull null
+            if (!t.isChannel) return@mapNotNull null
+            toCandidate(client, chat, MatchQuality.KEYWORD)
+        }.filter { it.role != MemberRole.NOT_MEMBER && it.role != MemberRole.BANNED }
+        return ChannelMatcher.classifyKeyword(input.keyword, candidates)
+    }
+
     private suspend fun toCandidate(client: TdlClient, chat: Chat, match: MatchQuality): ChannelCandidate {
         val t = chat.type as? ChatTypeSupergroup
         if (t == null) {
@@ -173,6 +188,17 @@ class TdlibChannelEngine(
                     req { client.deleteChat(chatId = chatId) }
                     ActionResult.Done("Telegram accepted the deletion of ${live.label}.")
                 }
+                ChannelAction.REMOVE -> {
+                    if (live.role == MemberRole.OWNER && chat.canBeDeletedForAllUsers) {
+                        log.log(LogLevel.WARN, "Deleting ${live.label} permanently (you own it)…")
+                        req { client.deleteChat(chatId = chatId) }
+                        ActionResult.Done("Telegram accepted the deletion of ${live.label}.")
+                    } else {
+                        if (live.role == MemberRole.NOT_MEMBER) return ActionResult.Failed(Failure(FailureKind.PERMISSION_DENIED, "You are not a member of ${live.label}."))
+                        req { client.leaveChat(chatId = chatId) }
+                        ActionResult.Done("Left ${live.label}.")
+                    }
+                }
                 ChannelAction.ARCHIVE -> {
                     req { client.addChatToList(chatId = chatId, chatList = ChatListArchive()) }
                     ActionResult.Done("Moved ${live.label} to the Archive.")
@@ -198,7 +224,7 @@ class TdlibChannelEngine(
         val role = sg?.let { roleOf(it.status) }
 
         return when (action) {
-            ChannelAction.LEAVE ->
+            ChannelAction.LEAVE, ChannelAction.REMOVE ->
                 if (role == MemberRole.NOT_MEMBER || role == MemberRole.BANNED || (sg?.status as? ChatMemberStatusCreator)?.isMember == false) {
                     VerifyResult.Verified("No longer a member of ${candidate.label}.")
                 } else VerifyResult.NotVerified("Telegram still reports membership (${role?.name}).")

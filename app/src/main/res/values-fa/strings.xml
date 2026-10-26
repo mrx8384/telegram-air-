@@ -166,4 +166,14 @@
     <string name="cannot_start">شروع ممکن نیست: %1$s</string>
     <string name="empty_list">ابتدا حداقل یک کانال اضافه کنید.</string>
     <string name="share_report">اشتراک گزارش</string>
+    <string name="action_remove">پاک کردن از تلگرام من</string>
+    <string name="action_remove_desc">کانال‌هایی که مالکشان هستید حذف می‌شوند و از بقیه خارج می‌شوید تا از تلگرام شما پاک شوند.</string>
+    <string name="keyword_title">جستجو با کلمه</string>
+    <string name="keyword_hint">یک کلمه از نام کانال‌ها، مثلاً فروش</string>
+    <string name="add_keyword">افزودن کلمه</string>
+    <string name="keyword_explain">همه کانال‌هایی را که در چت‌های تلگرام شما هستند و نامشان این کلمه را دارد پیدا می‌کند. بدون API تلگرام کار می‌کند (حالت صفحه).</string>
+    <string name="keyword_confirm_title">%1$d کانال پیدا شده با «%2$s» پاک شوند؟</string>
+    <string name="keyword_confirm_text">فهرست بالا را بررسی کنید و تیک هر کانالی را که می‌خواهید بماند بردارید. کانال‌هایی که مالکشان هستید برای همه حذف می‌شوند و از بقیه خارج می‌شوید. برای تأیید، همان کلمه را تایپ کنید.</string>
+    <string name="keyword_confirm_btn">تأیید</string>
+    <string name="keyword_confirmed">تأیید شد</string>
 </resources>

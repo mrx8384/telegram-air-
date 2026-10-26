@@ -97,6 +97,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (text == null) say(str(R.string.import_failed)) else addText(text.trimStart(BYTE_ORDER_MARK))
     }
 
+    var keywordText by mutableStateOf("")
+
+    fun addKeyword() {
+        val word = keywordText.trim()
+        if (word.isEmpty()) return
+        addText(ChannelInputParser.keywordRaw(word))
+        keywordText = ""
+    }
+
     fun remove(input: ChannelInput) = updateQueue(queue - input)
     fun clearQueue() = updateQueue(emptyList())
 
@@ -113,6 +122,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun start() {
         if (inputText.isNotBlank()) addFromInput()
+        if (keywordText.isNotBlank()) addKeyword()
         if (queue.isEmpty()) { say(str(R.string.empty_list)); return }
         viewModelScope.launch {
             when (val r = c.controller.begin(queue, mode, action, dryRun)) {
@@ -135,6 +145,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun skip(taskId: Int) = c.controller.skip(taskId)
     fun setIncluded(taskId: Int, v: Boolean) = c.controller.setIncluded(taskId, v)
     fun confirmDeletion(taskId: Int, typed: String): Boolean = c.controller.confirmDeletion(taskId, typed)
+    fun confirmKeyword(keyword: String, typed: String): Boolean = c.controller.confirmKeyword(keyword, typed)
     fun reportText(): String = c.controller.reportText()
 
     // ---------------------------------------------------------------- account

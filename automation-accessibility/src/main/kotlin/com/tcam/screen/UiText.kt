@@ -59,6 +59,8 @@ object Labels {
     val DELETE_CONFIRM = setOf("Delete channel", "Delete Channel", "Delete", "حذف کانال", "حذف")
     val JOIN = setOf("Join", "Join Channel", "Subscribe", "عضویت", "پیوستن", "عضویت در کانال", "پیوستن به کانال")
     val MEMBER_BAR = setOf("Mute", "Unmute", "بی‌صدا", "صدادار", "بی صدا")
+    /** Header above Telegram's global (public) search results. Rows below it are not the user's chats. */
+    val GLOBAL_SEARCH = setOf("Global search", "Global Search", "Global search results", "جستجوی سراسری", "جستجوی همگانی", "نتایج جستجوی سراسری")
     val CHANNEL_WORD = setOf("channel", "subscribers", "subscriber", "کانال", "مشترک")
     val NOT_FOUND = setOf(
         "username doesn't exist", "username does not exist", "doesn't seem to exist", "Username not found",

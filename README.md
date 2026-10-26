@@ -26,12 +26,18 @@ It works in two ways:
 - Plain channel titles (Persian and English; Arabic/Persian letter variants and digits are normalised)
 - Many channels at once (one per line or comma separated), duplicates removed
 - Import from a `.txt` file (see `samples/channels.txt`)
+- **Keyword search (works without a Telegram API):** enter one word, e.g. `crypto`. The app searches
+  *your own* Telegram chats (Telegram's global/public results are ignored), lists every channel whose
+  name contains the word, and turns each into its own task. You untick anything to keep and confirm the
+  whole list once by typing the word. In a text file, write `keyword: crypto` (or `کلمه: فروش`).
 
 **Actions** — the app keeps these clearly apart:
 - **Preview** — find and show details. Changes nothing.
 - **Archive** — move the chat to the Archive folder (removes it from the main chat list). You stay subscribed. Background mode only.
 - **Leave** — unsubscribe. The channel keeps existing for everyone else.
 - **Delete owned channel** — permanently delete the channel for all subscribers. Owner only.
+- **Remove from my Telegram** — delete the channel if you own it, otherwise leave it, so it disappears
+  from your Telegram. This is the usual choice with keyword search.
 
 **Batch workflow** (a state machine in `core/…/BatchProcessor.kt`)
 1. Read the list → 2. resolve each channel → 3. check membership/ownership → 4. show a preview →
@@ -43,6 +49,7 @@ It works in two ways:
 - Several matches → you must pick one. Partial name matches can never be acted on.
 - Deleting needs a `@username`, link, or a channel you picked — never a title alone.
 - **Every deletion needs its own confirmation**: you type the channel's `@username` (or exact title).
+  For keyword batches you see the full list first, can untick channels, and confirm by typing the keyword.
 - Permissions are checked before the preview and again right before each action (live data from Telegram).
 - Emergency stop (in the app, the notification and the floating panel).
 - Rate limits: the app waits exactly as long as Telegram asks (up to 5 minutes), otherwise the task fails. It never tries to get around them.
@@ -52,7 +59,8 @@ It works in two ways:
 **Other**
 - Telegram login: phone → code (with resend) → email code if asked → two-step-verification password. The phone, code and password go straight to TDLib and are not stored by the app.
 - TDLib's database is encrypted with a random key kept in the Android Keystore; the stored API hash is encrypted the same way.
-- Optional screen recording (MediaProjection → MP4 in `Movies/ChannelAutoManager`).
+- Optional screen recording (MediaProjection → MP4 in `Movies/ChannelAutoManager`). The video size is
+  picked from what the phone's H.264 encoder supports (tall screens are scaled to fit 1080×1920).
 - Optional floating control panel (Start / Pause / Resume / Stop, current channel and step).
 - Run history (Room).
 - Dark theme, English + Persian (RTL), in-app language switch.

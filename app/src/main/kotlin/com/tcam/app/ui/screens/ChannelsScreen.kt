@@ -110,6 +110,12 @@ fun ChannelsScreen(vm: MainViewModel, modifier: Modifier) {
         if (batch.tasks.isNotEmpty()) {
             item { Text(stringResource(R.string.tasks_title), style = MaterialTheme.typography.titleMedium) }
             items(batch.tasks, key = { it.id }) { task -> TaskCard(vm, task, batch.phase) }
+            if (batch.phase == BatchPhase.AWAITING_USER) {
+                val pending = batch.tasks.filter { it.keyword != null && it.needsDeletionConfirmation }.groupBy { it.keyword!! }
+                pending.forEach { (keyword, tasks) ->
+                    item(key = "kw-$keyword") { KeywordConfirmCard(vm, keyword, tasks.size) }
+                }
+            }
         }
         if (batch.phase == BatchPhase.FINISHED || batch.phase == BatchPhase.STOPPED) {
             item { ReportCard(vm, batch) }
@@ -140,6 +146,20 @@ private fun InputCard(vm: MainViewModel, enabled: Boolean) {
                 Text(stringResource(R.string.import_txt))
             }
             TextButton(onClick = vm::clearQueue, enabled = enabled && vm.queue.isNotEmpty()) { Text(stringResource(R.string.clear)) }
+        }
+        HorizontalDivider()
+        Text(stringResource(R.string.keyword_title), fontWeight = FontWeight.Medium)
+        Text(stringResource(R.string.keyword_explain), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = vm.keywordText,
+                onValueChange = { vm.keywordText = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text(stringResource(R.string.keyword_hint)) },
+                singleLine = true,
+                enabled = enabled,
+            )
+            Button(onClick = vm::addKeyword, enabled = enabled && vm.keywordText.isNotBlank()) { Text(stringResource(R.string.add_keyword)) }
         }
         if (vm.queue.isNotEmpty()) {
             Text(stringResource(R.string.queued_count, vm.queue.size), style = MaterialTheme.typography.bodySmall)
@@ -205,7 +225,7 @@ private fun ActionCard(vm: MainViewModel, enabled: Boolean) {
                     Text(
                         stringResource(a.label()),
                         fontWeight = FontWeight.Medium,
-                        color = if (a == ChannelAction.DELETE_OWNED) MaterialTheme.colorScheme.error else Color.Unspecified,
+                        color = if (a.mayDelete) MaterialTheme.colorScheme.error else Color.Unspecified,
                     )
                     Text(stringResource(a.description()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -310,11 +330,12 @@ private fun TaskCard(vm: MainViewModel, task: ChannelTask, phase: BatchPhase) {
                     Checkbox(checked = task.included, onCheckedChange = { vm.setIncluded(task.id, it) })
                     Text(stringResource(R.string.include))
                 }
-                if (task.action == ChannelAction.DELETE_OWNED && task.included) {
-                    if (task.deletionConfirmed) {
-                        Text(stringResource(R.string.deletion_confirmed), color = WarningColor, style = MaterialTheme.typography.bodySmall)
-                    } else {
-                        Button(
+                if (task.action.mayDelete && task.included) {
+                    when {
+                        task.deletionConfirmed ->
+                            Text(stringResource(R.string.deletion_confirmed), color = WarningColor, style = MaterialTheme.typography.bodySmall)
+                        task.keyword != null -> Unit // confirmed for the whole keyword in the card below the list
+                        else -> Button(
                             onClick = { showDelete = true },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
                         ) { Text(stringResource(R.string.confirm_delete)) }
@@ -330,6 +351,34 @@ private fun TaskCard(vm: MainViewModel, task: ChannelTask, phase: BatchPhase) {
             onConfirm = { typed -> vm.confirmDeletion(task.id, typed).also { if (it) showDelete = false } },
             onDismiss = { showDelete = false },
         )
+    }
+}
+
+@Composable
+private fun KeywordConfirmCard(vm: MainViewModel, keyword: String, count: Int) {
+    var typed by rememberSaveable(keyword) { mutableStateOf("") }
+    var wrong by remember { mutableStateOf(false) }
+    androidx.compose.material3.Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.keyword_confirm_title, count, keyword), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onErrorContainer)
+            Text(stringResource(R.string.keyword_confirm_text), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+            OutlinedTextField(
+                value = typed,
+                onValueChange = { typed = it; wrong = false },
+                singleLine = true,
+                placeholder = { Text(keyword) },
+                isError = wrong,
+                supportingText = { if (wrong) Text(stringResource(R.string.wrong_confirmation)) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = { wrong = !vm.confirmKeyword(keyword, typed) },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
+            ) { Text(stringResource(R.string.keyword_confirm_btn)) }
+        }
     }
 }
 

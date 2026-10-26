@@ -24,7 +24,10 @@ data class ChannelTask(
     val failureKind: FailureKind? = null,
 ) {
     val needsDeletionConfirmation: Boolean
-        get() = action == ChannelAction.DELETE_OWNED && state == TaskState.AWAITING_CONFIRMATION && included && !deletionConfirmed
+        get() = action.mayDelete && state == TaskState.AWAITING_CONFIRMATION && included && !deletionConfirmed
+
+    /** The keyword this task came from, if it was found by keyword search. */
+    val keyword: String? get() = (input as? ChannelInput.Keyword)?.keyword
 }
 
 data class BatchState(

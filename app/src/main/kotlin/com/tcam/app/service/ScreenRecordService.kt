@@ -107,10 +107,11 @@ class ScreenRecordService : Service() {
         }, Handler(Looper.getMainLooper()))
 
         val metrics = resources.displayMetrics
-        // Keep the encoder happy: even dimensions, at most 1280 px wide.
-        val scale = minOf(1f, 1280f / metrics.widthPixels)
-        val width = ((metrics.widthPixels * scale).toInt() / 2) * 2
-        val height = ((metrics.heightPixels * scale).toInt() / 2) * 2
+        val (screenW, screenH) = realScreenSize()
+        val size = VideoSizes.pick(screenW, screenH)
+        val width = size.width
+        val height = size.height
+        container.logs.log(LogLevel.INFO, "Recording at ${width}x$height (screen ${screenW}x$screenH, ${size.bitrate / 1000} kbps)")
 
         fileName = "tcam_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".mp4"
         val values = ContentValues().apply {
@@ -130,7 +131,7 @@ class ScreenRecordService : Service() {
         rec.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
         rec.setVideoSize(width, height)
         rec.setVideoFrameRate(30)
-        rec.setVideoEncodingBitRate(6_000_000)
+        rec.setVideoEncodingBitRate(size.bitrate)
         rec.setOutputFile(fd.fileDescriptor)
         rec.prepare()
         recorder = rec
@@ -142,6 +143,18 @@ class ScreenRecordService : Service() {
         rec.start()
         _state.value = RecordingState.Recording
         container.logs.log(LogLevel.INFO, "Screen recording started: $fileName")
+    }
+
+    private fun realScreenSize(): Pair<Int, Int> {
+        val wm = getSystemService(android.view.WindowManager::class.java)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val b = wm.maximumWindowMetrics.bounds
+            b.width() to b.height()
+        } else {
+            val m = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION") wm.defaultDisplay.getRealMetrics(m)
+            m.widthPixels to m.heightPixels
+        }
     }
 
     private fun stopRecording() {

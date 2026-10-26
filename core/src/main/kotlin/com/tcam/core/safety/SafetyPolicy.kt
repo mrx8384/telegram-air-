@@ -37,6 +37,13 @@ object SafetyPolicy {
                 MemberRole.NOT_MEMBER -> SafetyDecision.Denied("This account is not a member of the channel.")
                 MemberRole.BANNED -> SafetyDecision.Denied("This account is banned from the channel.")
             }
+            ChannelAction.REMOVE -> when (candidate.role) {
+                MemberRole.NOT_MEMBER -> SafetyDecision.Denied("This account is not a member of the channel.")
+                MemberRole.BANNED -> SafetyDecision.Denied("This account is banned from the channel.")
+                else -> if (candidate.match == MatchQuality.EXACT_TITLE && candidate.role == MemberRole.UNKNOWN && candidate.engine == com.tcam.core.model.EngineType.BACKGROUND)
+                    SafetyDecision.Denied("Could not confirm that this account is a member.")
+                else SafetyDecision.Allowed
+            }
             ChannelAction.DELETE_OWNED -> when {
                 candidate.match == MatchQuality.EXACT_TITLE ->
                     SafetyDecision.Denied("Deletion needs a @username, a link, or a channel you picked from the list — a title alone is not enough.")
@@ -55,6 +62,12 @@ object SafetyPolicy {
      * Each permanent deletion needs its own confirmation: the user must type the
      * channel's @username (or its exact title when it has no username).
      */
+    /** For keyword batches: the user confirms every deletion at once by typing the keyword itself. */
+    fun keywordConfirmationMatches(keyword: String, typed: String): Boolean {
+        val t = TitleNormalizer.normalize(typed)
+        return t.isNotEmpty() && t == TitleNormalizer.normalize(keyword)
+    }
+
     fun deletionConfirmationMatches(candidate: ChannelCandidate, typed: String): Boolean {
         val t = typed.trim()
         if (t.isEmpty()) return false

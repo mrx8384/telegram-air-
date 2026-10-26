@@ -18,6 +18,8 @@ object ChannelInputParser {
     /** Telegram usernames: 4–32 chars, start with a letter, letters/digits/underscores. */
     private val USERNAME = Regex("^[A-Za-z][A-Za-z0-9_]{3,31}$")
     private val HOSTS = setOf("t.me", "telegram.me", "telegram.dog")
+    /** "keyword: news" or "کلمه: اخبار" means: every channel whose name contains the word. */
+    val KEYWORD_PREFIXES = listOf("keyword:", "کلمه:", "کلیدواژه:")
     private val RESERVED_PATHS = setOf("joinchat", "addstickers", "addemoji", "share", "proxy", "socks", "login", "setlanguage", "addtheme", "c", "iv", "bg", "invoice", "boost")
 
     fun parse(text: String): List<ChannelInput> {
@@ -36,6 +38,11 @@ object ChannelInputParser {
     fun parseOne(entry: String): ChannelInput? {
         val raw = entry.trim()
         if (raw.isEmpty()) return null
+
+        KEYWORD_PREFIXES.firstOrNull { raw.startsWith(it, ignoreCase = true) }?.let { prefix ->
+            val word = raw.substring(prefix.length).trim()
+            return if (word.isEmpty()) null else ChannelInput.Keyword(word.replace(Regex("\\s+"), " "), raw)
+        }
 
         if (raw.startsWith("@")) {
             val name = raw.removePrefix("@").trim()
@@ -114,7 +121,11 @@ object ChannelInputParser {
         is ChannelInput.Username -> "u:" + input.username.lowercase()
         is ChannelInput.InviteLink -> "i:" + input.link
         is ChannelInput.Title -> "t:" + TitleNormalizer.normalize(input.title)
+        is ChannelInput.Keyword -> "k:" + TitleNormalizer.normalize(input.keyword)
     }
+
+    /** Text form that [parseOne] turns back into a keyword input. */
+    fun keywordRaw(word: String): String = "keyword: ${word.trim()}"
 }
 
 /** Normalises titles so that harmless differences (case, spacing, Arabic/Persian letter variants) do not matter. */

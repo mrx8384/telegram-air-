@@ -31,6 +31,8 @@ data class Failure(
 sealed class ResolveResult {
     data class Found(val candidate: ChannelCandidate) : ResolveResult()
     data class Ambiguous(val candidates: List<ChannelCandidate>) : ResolveResult()
+    /** Keyword search: every candidate is a match and becomes its own task. */
+    data class Many(val candidates: List<ChannelCandidate>) : ResolveResult()
     data class NotFound(val reason: String) : ResolveResult()
     data class Error(val failure: Failure) : ResolveResult()
 }

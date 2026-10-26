@@ -31,7 +31,20 @@ object ChannelMatcher {
                 else -> ResolveResult.Ambiguous(channels)
             }
             is ChannelInput.Title -> classifyTitle(input.title, channels)
+            is ChannelInput.Keyword -> classifyKeyword(input.keyword, channels)
         }
+    }
+
+    /** Keyword: every channel whose title (or username) contains the word. */
+    fun classifyKeyword(keyword: String, channels: List<ChannelCandidate>): ResolveResult {
+        val wanted = TitleNormalizer.normalize(keyword)
+        if (wanted.isEmpty()) return ResolveResult.NotFound("Empty keyword.")
+        val hits = channels.filter { c ->
+            c.isChannel && (TitleNormalizer.normalize(c.title).contains(wanted) ||
+                (c.username?.contains(wanted.removePrefix("@"), ignoreCase = true) == true))
+        }.distinctBy { it.key }.map { it.copy(match = MatchQuality.KEYWORD) }
+        return if (hits.isEmpty()) ResolveResult.NotFound("No channel in your Telegram contains \"$keyword\".")
+        else ResolveResult.Many(hits)
     }
 
     private fun classifyTitle(title: String, channels: List<ChannelCandidate>): ResolveResult {

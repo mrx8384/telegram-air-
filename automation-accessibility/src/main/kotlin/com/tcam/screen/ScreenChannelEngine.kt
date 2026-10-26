@@ -134,6 +134,7 @@ class ScreenChannelEngine(
             is ChannelInput.Username -> resolveUsername(pkg, input)
             is ChannelInput.InviteLink -> resolveInvite(pkg, input)
             is ChannelInput.Title -> resolveTitle(pkg, input)
+            is ChannelInput.Keyword -> resolveKeyword(pkg, input)
         }
         step(ScreenStep.DONE)
         r
@@ -189,28 +190,60 @@ class ScreenChannelEngine(
         step(ScreenStep.READ_RESULTS)
         delay(2500) // let local and server results arrive
         val wanted = TitleNormalizer.normalize(query)
-        return driver.snapshot().filter { n ->
-            !n.editable && n.label.isNotBlank() && TitleNormalizer.normalize(n.label).contains(wanted)
+        val nodes = driver.snapshot()
+        // Only the user's own chats: drop everything below the "Global search" header.
+        val globalTop = nodes.filter { UiText.equalsAny(it.text, Labels.GLOBAL_SEARCH) || UiText.equalsAny(it.description, Labels.GLOBAL_SEARCH) }
+            .minOfOrNull { it.bounds.top } ?: Int.MAX_VALUE
+        return nodes.filter { n ->
+            !n.editable && n.label.isNotBlank() && n.bounds.top < globalTop &&
+                TitleNormalizer.normalize(n.label).contains(wanted)
         }
     }
 
+    /** Title of a search-result row: the text before the first comma, without a leading "Channel." prefix. */
+    private fun rowTitle(label: String): String {
+        var t = label.trim()
+        for (prefix in listOf("Channel", "کانال")) {
+            if (t.startsWith("$prefix.") || t.startsWith("$prefix,") || t.startsWith("$prefix:")) {
+                t = t.substring(prefix.length + 1).trim()
+            }
+        }
+        return t.split(',', '\n', '،').first().trim()
+    }
+
+    /**
+     * A result row and its child text views are separate nodes; merge everything
+     * known about one title (channel word, subscriber count, username).
+     */
+    private fun rowsToCandidates(rows: List<UiNode>, match: MatchQuality): List<ChannelCandidate> =
+        rows.groupBy { TitleNormalizer.normalize(rowTitle(it.label)) }
+            .filterKeys { it.isNotEmpty() }
+            .map { (_, group) ->
+                val title = rowTitle(group.first().label)
+                ChannelCandidate(
+                    key = "t:$title",
+                    title = title,
+                    username = group.firstNotNullOfOrNull { UiText.usernameIn(it.label) },
+                    isChannel = group.any { UiText.containsAny(it.label, Labels.CHANNEL_WORD) },
+                    role = MemberRole.UNKNOWN,
+                    canDeleteForEveryone = false,
+                    memberCount = group.firstNotNullOfOrNull { UiText.subscriberCount(it.label) },
+                    description = null,
+                    match = match,
+                    engine = type,
+                )
+            }
+
+    /** Every channel in the user's own chat list whose name contains the keyword. */
+    private suspend fun resolveKeyword(pkg: String, input: ChannelInput.Keyword): ResolveResult {
+        val candidates = rowsToCandidates(searchFor(pkg, input.keyword), MatchQuality.KEYWORD)
+        driver.back()
+        driver.back()
+        return ChannelMatcher.classifyKeyword(input.keyword, candidates)
+    }
+
     private suspend fun resolveTitle(pkg: String, input: ChannelInput.Title): ResolveResult {
-        val rows = searchFor(pkg, input.title)
-        val candidates = rows.mapIndexed { i, row ->
-            val label = row.label
-            ChannelCandidate(
-                key = "t:${label.split(',', '\n').first().trim()}",
-                title = label.split(',', '\n', '،').first().trim(),
-                username = UiText.usernameIn(label),
-                isChannel = UiText.containsAny(label, Labels.CHANNEL_WORD),
-                role = MemberRole.UNKNOWN,
-                canDeleteForEveryone = false,
-                memberCount = UiText.subscriberCount(label),
-                description = null,
-                match = MatchQuality.EXACT_TITLE,
-                engine = type,
-            )
-        }.distinctBy { it.key }
+        val candidates = rowsToCandidates(searchFor(pkg, input.title), MatchQuality.EXACT_TITLE)
         driver.back()
         driver.back()
         return ChannelMatcher.classify(input, candidates)
@@ -229,7 +262,7 @@ class ScreenChannelEngine(
             }
             else -> {
                 val rows = searchFor(pkg, c.title)
-                val row = rows.firstOrNull { TitleNormalizer.normalize(it.label.split(',', '\n', '،').first()) == TitleNormalizer.normalize(c.title) }
+                val row = rows.firstOrNull { TitleNormalizer.normalize(rowTitle(it.label)) == TitleNormalizer.normalize(c.title) }
                     ?: fail(FailureKind.NOT_FOUND, "\"${c.title}\" is no longer in the search results.")
                 step(ScreenStep.OPEN_CHANNEL, c.title)
                 driver.click(Target.Node(row))
@@ -250,6 +283,7 @@ class ScreenChannelEngine(
             ChannelAction.ARCHIVE -> ActionResult.Failed(Failure(FailureKind.UNSUPPORTED, "Archiving is only available in background mode."))
             ChannelAction.LEAVE -> leave(pkg, candidate)
             ChannelAction.DELETE_OWNED -> delete(pkg, candidate)
+            ChannelAction.REMOVE -> remove(pkg, candidate)
         }
         step(ScreenStep.DONE)
         result
@@ -304,6 +338,50 @@ class ScreenChannelEngine(
         return ActionResult.Done("Tapped \"Delete channel\" for ${c.label} and confirmed.")
     }
 
+    /** Deletes the channel when Telegram offers "Delete channel" (owner), otherwise leaves it. */
+    private suspend fun remove(pkg: String, c: ChannelCandidate): ActionResult {
+        val screen = reopenAndVerify(pkg, c)
+        if (screen.role == MemberRole.NOT_MEMBER) return ActionResult.Failed(Failure(FailureKind.PERMISSION_DENIED, "You are not subscribed to ${c.label}."))
+        openInfoAndReadUsername()
+
+        step(ScreenStep.FIND_ACTION, "Edit")
+        val edit = driver.findTarget(Labels.EDIT, 3000, allowOcr = false)
+        if (edit != null) {
+            driver.click(edit)
+            val del = driver.scrollUntil(Labels.DELETE_CHANNEL)
+            if (del != null) {
+                step(ScreenStep.PERFORM_ACTION, "Delete channel")
+                driver.click(Target.Node(del))
+                step(ScreenStep.CONFIRM_DIALOG)
+                val confirm = driver.findTarget(Labels.DELETE_CONFIRM, 5000)
+                    ?: fail(FailureKind.UI_CHANGED, "Telegram's delete confirmation did not appear.")
+                driver.click(confirm)
+                delay(2000)
+                return ActionResult.Done("You own ${c.label}: tapped \"Delete channel\" and confirmed.")
+            }
+            // Admin but not owner: back out of the edit page and leave instead.
+            driver.back()
+            delay(700)
+        }
+
+        step(ScreenStep.FIND_ACTION, "Leave channel")
+        var leave = openMenuAndFind(Labels.LEAVE_CHANNEL)
+        if (leave == null) {
+            driver.back()
+            delay(700)
+            leave = openMenuAndFind(Labels.LEAVE_CHANNEL)
+        }
+        leave ?: fail(FailureKind.UI_CHANGED, "Could not find \"Leave channel\" in Telegram's menu.")
+        step(ScreenStep.PERFORM_ACTION, "Leave channel")
+        driver.click(leave)
+        step(ScreenStep.CONFIRM_DIALOG)
+        val confirm = driver.findTarget(Labels.LEAVE_CONFIRM, 5000)
+            ?: fail(FailureKind.UI_CHANGED, "Telegram's confirmation dialog did not appear.")
+        driver.click(confirm)
+        delay(1500)
+        return ActionResult.Done("Tapped \"Leave channel\" for ${c.label} and confirmed.")
+    }
+
     private suspend fun openMenuAndFind(labels: Set<String>): Target? {
         driver.findTarget(labels, 1000, allowOcr = false)?.let { return it }
         val more = driver.findTarget(Labels.MORE_OPTIONS, 4000) ?: return null
@@ -319,11 +397,22 @@ class ScreenChannelEngine(
         val username = candidate.username
         when {
             action == ChannelAction.PREVIEW -> VerifyResult.Verified("Nothing to verify.")
-            username.isNullOrBlank() -> VerifyResult.NotVerified("Channels without a username cannot be re-checked on screen.")
+            username.isNullOrBlank() -> {
+                // Search the user's own chats again: the channel should be gone.
+                val rows = searchFor(pkg, candidate.title)
+                val still = rows.any { TitleNormalizer.normalize(rowTitle(it.label)) == TitleNormalizer.normalize(candidate.title) }
+                driver.back()
+                driver.back()
+                if (still) VerifyResult.NotVerified("\"${candidate.title}\" still appears in your chats.")
+                else VerifyResult.Verified("\"${candidate.title}\" is no longer in your chats.")
+            }
             else -> {
                 TelegramApps.openUsername(context, pkg, username)
                 val screen = awaitChannelScreen()
                 when (action) {
+                    ChannelAction.REMOVE ->
+                        if (screen == null || screen.role == MemberRole.NOT_MEMBER) VerifyResult.Verified("${candidate.label} is no longer in your chats.")
+                        else VerifyResult.NotVerified("Telegram still shows you as subscribed.")
                     ChannelAction.LEAVE ->
                         if (screen?.role == MemberRole.NOT_MEMBER) VerifyResult.Verified("Telegram now shows \"Join\" for ${candidate.label}.")
                         else VerifyResult.NotVerified("Telegram does not show \"Join\" yet.")

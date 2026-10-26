@@ -118,6 +118,11 @@ class BatchProcessor(
                     applySafety(id)
                     return
                 }
+                is ResolveResult.Many -> {
+                    expandKeywordTask(id, r.candidates)
+                    log.log(LogLevel.INFO, "${input.displayText}: found ${r.candidates.size} channel(s): ${r.candidates.joinToString { it.label }}")
+                    return
+                }
                 is ResolveResult.Ambiguous -> {
                     move(id, TaskState.NEEDS_SELECTION) {
                         it.copy(options = r.candidates, message = "${r.candidates.size} channels match. Pick the right one.")
@@ -141,6 +146,34 @@ class BatchProcessor(
                     return
                 }
             }
+        }
+    }
+
+    /** A keyword found several channels: the task takes the first, and one new task is added per other channel. */
+    private fun expandKeywordTask(id: Int, candidates: List<com.tcam.core.model.ChannelCandidate>) {
+        val first = candidates.first()
+        move(id, TaskState.RESOLVED) { it.copy(candidate = first, options = emptyList()) }
+        applySafety(id)
+        if (candidates.size == 1) return
+        _state.update { s ->
+            val original = s.tasks.first { it.id == id }
+            var nextId = s.tasks.maxOf { it.id } + 1
+            val extra = candidates.drop(1).map { c ->
+                val t = ChannelTask(id = nextId++, input = original.input, action = original.action, state = TaskState.RESOLVED, candidate = c)
+                applySafetyTo(t)
+            }
+            val index = s.tasks.indexOfFirst { it.id == id }
+            s.copy(tasks = s.tasks.subList(0, index + 1) + extra + s.tasks.subList(index + 1, s.tasks.size))
+        }
+    }
+
+    /** Pure version of [applySafety] for tasks that are not in the state yet. */
+    private fun applySafetyTo(t: ChannelTask): ChannelTask {
+        val c = t.candidate ?: return t
+        if (t.action == ChannelAction.PREVIEW) return t.copy(state = TaskStateMachine.transition(t.state, TaskState.SUCCEEDED), message = describe(c))
+        return when (val d = SafetyPolicy.check(c, t.action)) {
+            SafetyDecision.Allowed -> t.copy(state = TaskStateMachine.transition(t.state, TaskState.AWAITING_CONFIRMATION), message = describe(c))
+            is SafetyDecision.Denied -> t.copy(state = TaskStateMachine.transition(t.state, TaskState.BLOCKED), message = d.reason, failureKind = FailureKind.PERMISSION_DENIED)
         }
     }
 
@@ -190,10 +223,31 @@ class BatchProcessor(
     fun confirmDeletion(taskId: Int, typed: String): Boolean {
         val t = task(taskId)
         val candidate = t.candidate ?: return false
-        if (t.action != ChannelAction.DELETE_OWNED || t.state != TaskState.AWAITING_CONFIRMATION) return false
+        if (!t.action.mayDelete || t.state != TaskState.AWAITING_CONFIRMATION) return false
         if (!SafetyPolicy.deletionConfirmationMatches(candidate, typed)) return false
         _state.update { s -> s.copy(tasks = s.tasks.map { if (it.id == taskId) it.copy(deletionConfirmed = true) else it }) }
         log.log(LogLevel.WARN, "Deletion of ${candidate.label} confirmed by you.")
+        return true
+    }
+
+    /** Keywords whose found channels still wait for the typed keyword confirmation. */
+    fun keywordsAwaitingConfirmation(): Map<String, Int> =
+        _state.value.tasks.filter { it.needsDeletionConfirmation && it.keyword != null }
+            .groupingBy { it.keyword!! }.eachCount()
+
+    /**
+     * Confirms every pending deletion found by [keyword] at once. The user must type the
+     * keyword itself, after seeing the full list of channels.
+     */
+    fun confirmKeyword(keyword: String, typed: String): Boolean {
+        if (!SafetyPolicy.keywordConfirmationMatches(keyword, typed)) return false
+        var count = 0
+        _state.update { s ->
+            s.copy(tasks = s.tasks.map {
+                if (it.keyword == keyword && it.needsDeletionConfirmation) { count++; it.copy(deletionConfirmed = true) } else it
+            })
+        }
+        log.log(LogLevel.WARN, "You confirmed removing $count channel(s) found by \"$keyword\".")
         return true
     }
 
@@ -258,7 +312,7 @@ class BatchProcessor(
 
         // Re-check right before acting, in case anything changed since the preview.
         val decision = SafetyPolicy.check(candidate, t.action)
-        if (decision is SafetyDecision.Denied || (t.action == ChannelAction.DELETE_OWNED && !t.deletionConfirmed)) {
+        if (decision is SafetyDecision.Denied || (t.action.mayDelete && !t.deletionConfirmed)) {
             val reason = (decision as? SafetyDecision.Denied)?.reason ?: "Deletion was not confirmed."
             move(id, TaskState.EXECUTING)
             move(id, TaskState.FAILED) { it.copy(message = reason, failureKind = FailureKind.PERMISSION_DENIED) }
@@ -421,6 +475,7 @@ class BatchProcessor(
             ChannelAction.ARCHIVE -> "archive"
             ChannelAction.LEAVE -> "leave"
             ChannelAction.DELETE_OWNED -> "permanently delete"
+            ChannelAction.REMOVE -> "remove (delete if owned, otherwise leave)"
         }
     }
 }

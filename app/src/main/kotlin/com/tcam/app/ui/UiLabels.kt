@@ -67,6 +67,7 @@ import com.tcam.core.state.TaskState
     ChannelAction.ARCHIVE -> R.string.action_archive
     ChannelAction.LEAVE -> R.string.action_leave
     ChannelAction.DELETE_OWNED -> R.string.action_delete
+    ChannelAction.REMOVE -> R.string.action_remove
 }
 
 @StringRes fun ChannelAction.description(): Int = when (this) {
@@ -74,6 +75,7 @@ import com.tcam.core.state.TaskState
     ChannelAction.ARCHIVE -> R.string.action_archive_desc
     ChannelAction.LEAVE -> R.string.action_leave_desc
     ChannelAction.DELETE_OWNED -> R.string.action_delete_desc
+    ChannelAction.REMOVE -> R.string.action_remove_desc
 }
 
 @StringRes fun AutomationMode.label(): Int = when (this) {

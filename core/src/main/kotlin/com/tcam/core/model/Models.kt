@@ -22,14 +22,19 @@ enum class EngineType { SCREEN, BACKGROUND }
  * - [ARCHIVE]: move the chat to the Archive list. You stay subscribed; the channel is untouched.
  * - [LEAVE]: unsubscribe. The channel keeps existing for everyone else.
  * - [DELETE_OWNED]: permanently delete the channel for all subscribers. Owner only.
+ * - [REMOVE]: clear the channel out of your Telegram: delete it if you own it, otherwise leave it.
  */
 enum class ChannelAction {
     PREVIEW,
     ARCHIVE,
     LEAVE,
-    DELETE_OWNED;
+    DELETE_OWNED,
+    REMOVE;
 
-    val isDestructive: Boolean get() = this == LEAVE || this == DELETE_OWNED
+    val isDestructive: Boolean get() = this == LEAVE || this == DELETE_OWNED || this == REMOVE
+
+    /** Actions that may permanently delete a channel and therefore need an explicit typed confirmation. */
+    val mayDelete: Boolean get() = this == DELETE_OWNED || this == REMOVE
     val changesAnything: Boolean get() = this != PREVIEW
 }
 
@@ -47,11 +52,18 @@ sealed class ChannelInput {
     /** Free text: a channel title. Can match several channels. */
     data class Title(val title: String, override val raw: String) : ChannelInput()
 
+    /**
+     * A word to search for: every channel in the user's own Telegram whose name
+     * contains it becomes a task. The user reviews the list and confirms by typing the word.
+     */
+    data class Keyword(val keyword: String, override val raw: String) : ChannelInput()
+
     val displayText: String
         get() = when (this) {
             is Username -> "@$username"
             is InviteLink -> link
             is Title -> title
+            is Keyword -> "🔎 $keyword"
         }
 }
 
@@ -71,6 +83,9 @@ enum class MatchQuality {
 
     /** The user picked this candidate from a list. */
     USER_SELECTED,
+
+    /** The name contains the keyword the user asked for (keyword search in the user's own chats). */
+    KEYWORD,
 }
 
 /** A channel found by an engine. */

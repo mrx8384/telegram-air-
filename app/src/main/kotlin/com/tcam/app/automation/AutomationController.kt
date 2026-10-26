@@ -85,6 +85,7 @@ class AutomationController(
     fun skip(taskId: Int) = processor.skip(taskId)
     fun setIncluded(taskId: Int, included: Boolean) = processor.setIncluded(taskId, included)
     fun confirmDeletion(taskId: Int, typed: String) = processor.confirmDeletion(taskId, typed)
+    fun confirmKeyword(keyword: String, typed: String) = processor.confirmKeyword(keyword, typed)
 
     /** Stage 2: run the confirmed tasks. */
     fun confirmAndRun(): BatchProcessor.StartResult = processor.startExecution()

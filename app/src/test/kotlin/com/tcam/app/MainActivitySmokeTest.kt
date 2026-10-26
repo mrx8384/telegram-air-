@@ -53,6 +53,19 @@ class MainActivitySmokeTest {
         compose.onNodeWithText("Dry run").assertIsDisplayed()
     }
 
+    @Test fun keywordIsAddedToTheQueue() {
+        compose.onNodeWithText("Search by keyword").assertIsDisplayed()
+        compose.onNode(hasText("A word in the channel names, e.g. crypto")).performTextInput("crypto")
+        compose.onNodeWithText("Add keyword").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("🔎 crypto").assertIsDisplayed()
+        compose.waitForIdle()
+        val stored = compose.activity.application.container.settings.channelText
+        assertEquals("keyword: crypto", stored)
+        scrollTo("Remove from my Telegram")
+        compose.onNodeWithText("Remove from my Telegram").assertIsDisplayed()
+    }
+
     @Test fun startWithoutAnyEngineExplainsWhy() {
         compose.onNode(hasText(hint)).performTextInput("@channel_one")
         scrollTo("Find channels")

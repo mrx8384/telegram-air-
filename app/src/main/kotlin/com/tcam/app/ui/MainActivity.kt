@@ -9,10 +9,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.tcam.app.service.ScreenRecordService
 
 class MainActivity : AppCompatActivity() {
-    private val vm: MainViewModel by viewModels()
+    private val vm: MainViewModel by viewModels {
+        viewModelFactory { initializer { MainViewModel(application) } }
+    }
 
     private val captureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val data = result.data
