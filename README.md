@@ -103,9 +103,9 @@ EOF
 ```
 
 APK output: `app/build/outputs/apk/debug/`
-- `app-arm64-v8a-debug.apk` — most phones (~56 MB)
+- `app-arm64-v8a-debug.apk` — most phones (~30 MB)
 - `app-armeabi-v7a-debug.apk`, `app-x86_64-debug.apk`, `app-x86-debug.apk`
-- `app-universal-debug.apk` — all CPU types (~98 MB)
+- `app-universal-debug.apk` — all CPU types (~72 MB)
 
 Targets Android 10 (API 29) through Android 16 (targetSdk 36). It compiles against API 37 because
 the current AndroidX libraries require it.

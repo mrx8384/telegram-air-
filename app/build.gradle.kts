@@ -72,6 +72,8 @@ android {
     packaging {
         // Compress native libraries (TDLib, ML Kit) inside the APK to keep downloads small.
         jniLibs { useLegacyPackaging = true }
+        // Compress dex too: the TDLib API classes are large and debug builds are not minified.
+        dex { useLegacyPackaging = true }
     }
 
     // One APK per CPU type plus a universal APK. Most phones need arm64-v8a.
