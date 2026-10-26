@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="screen_service_label">Channel Auto Manager – Telegram screen automation</string>
+    <string name="screen_service_description">Lets Channel Auto Manager open the official Telegram app, search for the channels you listed, and tap Leave or Delete only after you confirm. It can only see Telegram, nothing else. Turn it off any time.</string>
+</resources>

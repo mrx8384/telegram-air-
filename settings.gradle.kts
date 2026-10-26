@@ -25,4 +25,4 @@ rootProject.name = "TelegramChannelAutoManager"
 include(":core")
 include(":automation-tdlib")
 include(":automation-accessibility")
-include(":app")
+//include(":app")
