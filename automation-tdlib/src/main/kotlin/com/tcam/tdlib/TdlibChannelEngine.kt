@@ -224,7 +224,6 @@ class TdlibChannelEngine(
         is ChatMemberStatusRestricted -> if (status.isMember) MemberRole.MEMBER else MemberRole.NOT_MEMBER
         is ChatMemberStatusLeft -> MemberRole.NOT_MEMBER
         is ChatMemberStatusBanned -> MemberRole.BANNED
-        else -> MemberRole.UNKNOWN
     }
 
     private class TdlibCallException(val failure: Failure) : Exception(failure.message)

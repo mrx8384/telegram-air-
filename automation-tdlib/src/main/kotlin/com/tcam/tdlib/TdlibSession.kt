@@ -26,6 +26,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -126,7 +128,6 @@ class TdlibSession(
             is AuthorizationStateLoggingOut -> AuthStep.LoggingOut
             is AuthorizationStateClosing -> AuthStep.LoggingOut
             is AuthorizationStateClosed -> AuthStep.Closed
-            else -> AuthStep.Error("Unknown login state: ${state::class.simpleName}")
         }
         if (step == AuthStep.Closed) {
             updatesJob?.cancel()
@@ -160,6 +161,21 @@ class TdlibSession(
             _auth.value = AuthStep.Error("TDLib rejected the parameters: ${r.message}")
             log.log(LogLevel.ERROR, "setTdlibParameters failed: ${r.code} ${r.message}")
         }
+    }
+
+    /** Closes the current client (if any) and starts again, e.g. after new API credentials were saved. */
+    suspend fun restart() {
+        val old = lock.withLock { _client }
+        if (old != null) {
+            old.close()
+            withTimeoutOrNull(10_000) { auth.first { it == AuthStep.Closed } }
+            lock.withLock {
+                updatesJob?.cancel()
+                _client = null
+                _auth.value = AuthStep.Closed
+            }
+        }
+        start()
     }
 
     suspend fun submitPhoneNumber(phone: String): Result<Unit> =

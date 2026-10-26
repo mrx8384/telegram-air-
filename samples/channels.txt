@@ -1,0 +1,6 @@
+# One channel per line. Lines starting with # are ignored.
+@channel_one
+@channel_two
+@channel_three
+https://t.me/channel_four
+My Channel Name

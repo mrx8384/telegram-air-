@@ -97,6 +97,7 @@ class BatchProcessor(
                     log.log(LogLevel.INFO, "Nothing to do. ${summaryLine()}")
                 }
             } catch (e: CancellationException) {
+                setCurrent(null)
                 throw e
             }
         }
@@ -333,8 +334,11 @@ class BatchProcessor(
         log.log(LogLevel.WARN, "Stopped.")
     }
 
+    /** Clears everything without logging; used before loading a new batch. */
     fun reset() {
-        stop()
+        job?.cancel()
+        job = null
+        paused.value = false
         engine = null
         _state.value = BatchState()
     }

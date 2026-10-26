@@ -39,7 +39,7 @@ enum class ScreenStep {
 class ScreenChannelEngine(
     private val context: Context,
     private val log: LogSink,
-    private val driver: ScreenDriver = ScreenDriver(OcrReader(), log),
+    private val driver: ScreenDriver = ScreenDriver({ OcrReader() }, log),
     private val stepTimeoutMillis: Long = 10_000,
 ) : ChannelEngine {
 

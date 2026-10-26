@@ -33,10 +33,13 @@ sealed class Target {
  * known label — there is no blind clicking and no fixed coordinate.
  */
 class ScreenDriver(
-    private val ocr: OcrReader,
+    ocrFactory: () -> OcrReader,
     private val log: LogSink,
     private val pollMillis: Long = 350,
 ) {
+    // ML Kit is only loaded the first time OCR is actually needed.
+    private val ocr by lazy(ocrFactory)
+
     val service: TelegramAccessibilityService? get() = TelegramAccessibilityService.instance.value
 
     fun snapshot(): List<UiNode> {
